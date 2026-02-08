@@ -1,6 +1,6 @@
 // --- IMPORTS ---
-import { CONFIG } from './config.js';
-import { NetworkManager } from './mqtt.js';
+import { CONFIG } from '/src/core./config.js';
+import { NetworkManager } from '/src/core/./mqtt.js';
 
 // --- GLOBAL STATE ---
 export const State = {
