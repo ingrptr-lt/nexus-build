@@ -1,6 +1,6 @@
 // --- IMPORTS ---
-import { CONFIG } from '/src/core./config.js';
-import { NetworkManager } from '/src/core/./mqtt.js';
+import { CONFIG } from './config.js';
+import { NetworkManager } from './mqtt.js';
 
 // --- GLOBAL STATE ---
 export const State = {
@@ -15,48 +15,49 @@ export const State = {
 const UI = {
     authOverlay: document.getElementById('auth-overlay'),
     authInput: document.getElementById('auth-pass-input'),
+    authBtn: document.getElementById('auth-btn'),
+    authMsg: document.getElementById('auth-msg'),
     appContainer: document.getElementById('app-container'),
-    chat: document.getElementById('chat-container'),
     input: document.getElementById('user-input'),
+    sendBtn: document.getElementById('send-btn'),
     boot: document.getElementById('boot-screen'),
-    mediaDeck: document.getElementById('media-deck')
-};
-
-// --- EXPOSE FUNCTIONS TO WINDOW ---
-window.app = {
-    toggleMedia: () => {
-        if(UI.mediaDeck) UI.mediaDeck.classList.toggle('active');
-    }
+    apiDot: document.getElementById('api-status-dot'),
+    roomDisp: document.getElementById('room-display'),
+    adminPanel: document.getElementById('admin-panel'),
+    apiKeyInput: document.getElementById('api-key-input'),
+    providerSelect: document.getElementById('provider-select')
 };
 
 // --- 1. INITIALIZATION ---
 window.addEventListener('load', () => {
-    // Check Invite
+    // Check URL for Invite (API Keys)
     const urlParams = new URLSearchParams(window.location.search);
     if(urlParams.get('s')) {
         try {
-            State.preloadedInvite = JSON.parse(atob(urlParams.get('s')));
-            if(State.preloadedInvite.k) {
-                State.apiKeys[State.preloadedInvite.k.provider] = State.preloadedInvite.k.key;
+            const data = JSON.parse(atob(urlParams.get('s')));
+            if(data.k) { // 'k' for keys
+                State.apiKeys[data.k.provider] = data.k.key;
                 localStorage.setItem('nexus_api_keys', JSON.stringify(State.apiKeys));
+                console.log("Secure Invite Keys Applied");
             }
         } catch(e) {}
     }
 
     // Show Lock Screen
     UI.authOverlay.classList.remove('hidden');
-    document.getElementById('auth-btn').addEventListener('click', attemptUnlock);
+    
+    // Bind Buttons
+    UI.authBtn.addEventListener('click', attemptUnlock);
     UI.input.addEventListener('keydown', (e) => { if(e.key === 'Enter') attemptUnlock(); });
+    UI.sendBtn.addEventListener('click', handleSend);
 });
 
 // --- 2. AUTHENTICATION ---
 function attemptUnlock() {
-    const input = UI.authInput;
-    const msg = document.getElementById('auth-msg');
-    
-    if (input.value === CONFIG.SYSTEM_PASSWORD) {
+    if (UI.authInput.value === CONFIG.SYSTEM_PASSWORD) {
         State.isUnlocked = true;
         
+        // Unlock Animation
         UI.authOverlay.style.opacity = '0';
         setTimeout(() => {
             UI.authOverlay.style.display = 'none';
@@ -64,12 +65,9 @@ function attemptUnlock() {
             startSystem();
         }, 500);
     } else {
-        UI.authOverlay.classList.add('shake-anim');
-        msg.innerText = "ACCESS DENIED";
-        setTimeout(() => {
-            UI.authOverlay.classList.remove('shake-anim');
-            msg.innerText = "";
-        }, 1000);
+        UI.authMsg.innerText = "ACCESS DENIED";
+        UI.authInput.classList.add('shake-anim');
+        setTimeout(() => UI.authInput.classList.remove('shake-anim'), 500);
     }
 }
 
@@ -77,28 +75,57 @@ function attemptUnlock() {
 const netManager = new NetworkManager();
 
 function startSystem() {
+    // Boot Animation
     setTimeout(() => {
         UI.boot.style.opacity = '0';
         setTimeout(() => {
             UI.boot.remove();
-            netManager.connect();
+            initGalaxy(); // <--- FIX: ADDED BACK
+            netManager.connect(); // Connect MQTT
         }, 800);
     }, 1500);
-    
-    UI.input.addEventListener('keydown', (e) => { if(e.key === 'Enter') handleSend(); });
 }
 
+// --- 4. GALAXY BACKGROUND (RESTORED) ---
+function initGalaxy() {
+    const canvas = document.getElementById('galaxy-canvas');
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    const stars = Array(100).fill().map(() => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        s: Math.random() * 2
+    }));
+
+    function draw() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        stars.forEach(s => {
+            s.y += s.s * 0.2;
+            if(s.y > canvas.height) s.y = 0;
+            ctx.fillRect(s.x, s.y, s.s, s.s);
+        });
+        requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+// --- 5. CHAT & GATEKEEPER ---
 function handleSend() {
     if(!State.isUnlocked) {
         UI.authOverlay.classList.add('shake-anim');
         setTimeout(() => UI.authOverlay.classList.remove('shake-anim'), 500);
-        return; 
+        return;
     }
-    
+
     const text = UI.input.value.trim();
     if(!text) return;
     UI.input.value = '';
-    
+
     if(text.startsWith('/ai')) {
         const prompt = text.replace('/ai ', '');
         addMessage(prompt, true, "USER", "🧠");
@@ -109,11 +136,12 @@ function handleSend() {
     }
 }
 
-// --- 4. AI LOGIC ---
+// --- 6. AI LOGIC ---
 async function processAI(prompt) {
-    const key = State.apiKeys['groq'];
+    const key = State.apiKeys['groq']; // Default provider
     if(!key) {
-        addMessage("Error: No API Key", false, "SYS", "⚠️");
+        addMessage("⚠️ API KEY MISSING. Click Admin (Lock Icon) to enter.", false, "SYS", "🔒");
+        toggleAdmin(); // Open Admin Panel automatically
         return;
     }
     
@@ -128,22 +156,24 @@ async function processAI(prompt) {
             })
         });
         const data = await res.json();
-        // Remove loading msg
-        UI.chat.lastChild.remove(); 
-        addMessage(marked.parse(data.choices[0].message.content), false, "AI", "🤖", true);
+        UI.chat.lastChild.remove(); // Remove thinking
+        
+        // Using global 'marked' from CDN
+        const htmlContent = marked.parse(data.choices[0].message.content);
+        addMessage(htmlContent, false, "AI", "🤖", true);
     } catch(e) {
         UI.chat.lastChild.remove();
-        addMessage("AI Error", false, "SYS", "❌");
+        addMessage(`AI Error: ${e.message}`, false, "SYS", "❌");
     }
 }
 
-// --- 5. UI HELPERS ---
+// --- 7. UI HELPERS ---
 function addMessage(text, isMe, sender, avatar, isHtml = false) {
     const div = document.createElement('div');
-    div.className = `flex gap-3 my-2 ${isMe ? 'flex-row-reverse' : ''} animate-[slideUp_0.3s_ease-out]`;
+    div.className = `flex gap-3 my-2 ${isMe ? 'flex-row-reverse' : ''}`;
     
-    const avatarDiv = `<div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs shrink-0">${avatar||'👤'}</div>`;
-    const bubbleClass = isMe ? "bg-cyan-600 text-black" : "bg-gray-800 text-white border border-gray-700";
+    const avatarDiv = `<div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs">${avatar||'👤'}</div>`;
+    const bubbleClass = isMe ? "bg-cyan-600 text-black" : "bg-gray-800 text-white";
     const content = isHtml ? text : text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     div.innerHTML = `
@@ -155,3 +185,27 @@ function addMessage(text, isMe, sender, avatar, isHtml = false) {
     UI.chat.appendChild(div);
     UI.chat.scrollTop = UI.chat.scrollHeight;
 }
+
+// --- 8. ADMIN PANEL LOGIC (RESTORED) ---
+function toggleAdmin() {
+    if(UI.adminPanel) UI.adminPanel.classList.toggle('hidden');
+}
+
+function saveApiKey() {
+    if(UI.apiKeyInput) {
+        const key = UI.apiKeyInput.value.trim();
+        if(key) {
+            State.apiKeys['groq'] = key; // Saving to Groq for demo
+            localStorage.setItem('nexus_api_keys', JSON.stringify(State.apiKeys));
+            addMessage("API Key Saved. System Ready.", false, "SYS", "✅");
+            toggleAdmin();
+        }
+    }
+}
+
+// Expose functions for HTML
+window.app = {
+    toggleMedia: () => alert("Media logic would go here"),
+    toggleAdmin: toggleAdmin,
+    saveApiKey: saveApiKey
+};
