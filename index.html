@@ -12,9 +12,28 @@
 </head>
 <body class="h-screen w-screen bg-black text-white overflow-hidden select-none font-body">
 
-    <!-- AUTH LOCK SCREEN -->
-    <div id="auth-overlay" class="hidden">
-        <!-- Injected by JS or static styling -->
+    <!-- AUTH LOCK SCREEN --<!-- OVERLAYS -->
+<div id="overlays-container">
+    
+    <!-- ADMIN PANEL (Restored) -->
+    <div id="admin-panel" class="hidden fixed bottom-20 right-4 w-80 glass-panel rounded-xl border-red-500/30 p-5 z-50 shadow-2xl bg-black/90">
+        <h3 class="text-cyan-400 font-bold text-xs mb-4 uppercase">SYSTEM CONSOLE</h3>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="text-[9px] text-gray-500 uppercase font-bold mb-1 block">API KEY (GROQ)</label>
+                <input type="password" id="api-key-input" class="w-full bg-black/50 border border-white/10 rounded p-2.5 text-white text-xs outline-none focus:border-cyan-500" placeholder="Enter gsk_...">
+            </div>
+            
+            <button onclick="window.app.saveApiKey()" class="w-full bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-200 text-[10px] font-bold py-2.5 rounded border border-cyan-500/30">
+                SAVE KEY
+            </button>
+            
+            <button onclick="window.app.toggleAdmin()" class="text-gray-400 text-xs hover:text-white">CLOSE</button>
+        </div>
+    </div>
+
+</div>!-- Injected by JS or static styling -->
         <div class="relative w-32 h-32 mb-6 text-cyan-500 drop-shadow-[0_0_15px_rgba(0,229,255,0.8)]">
             <svg viewBox="0 0 100 100" class="w-full h-full">
                 <path fill="currentColor" d="M50 30C38.95 30 30 38.95 30 50V60C30 71.05 38.95 80 50 80C61.05 80 70 71.05 70 60V50C70 38.95 61.05 30 50 30ZM66 60C66 68.82 58.82 76 50 76C41.18 76 34 68.82 34 60V50C34 41.18 41.18 34 50 34C58.82 34 66 41.18 66 50V60Z"/>
